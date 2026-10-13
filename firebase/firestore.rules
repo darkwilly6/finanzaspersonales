@@ -1,0 +1,461 @@
+rules_version = '2';
+
+// Capital OS · reglas de Firestore (versión completa).
+// Mínimo privilegio: cada persona solo accede a users/{su uid}/… y cualquier otra ruta está denegada.
+// Los importes son enteros en centavos. Nada financiero se borra: se archiva o se anula.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // La identidad sale SIEMPRE de request.auth, nunca de un dato enviado por el cliente.
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isDateStr(s) {
+      return s is string && s.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+    }
+
+    function isMinor(n) {
+      return n is int && n >= -100000000000 && n <= 100000000000;
+    }
+
+    function isCreateStamp(d) {
+      return d.createdAt == request.time && d.updatedAt == request.time;
+    }
+
+    function isUpdateStamp(d) {
+      return d.createdAt == resource.data.createdAt && d.updatedAt == request.time;
+    }
+
+    /* ───────────── Perfil de usuario ───────────── */
+
+    function validUserDoc(d) {
+      return d.keys().hasOnly(['schemaVersion', 'profile', 'preferences', 'createdAt', 'updatedAt'])
+        && d.schemaVersion == 1
+        && d.profile is map
+        && d.profile.keys().hasOnly(['displayName', 'email'])
+        && d.profile.displayName is string
+        && d.profile.displayName.size() >= 1
+        && d.profile.displayName.size() <= 80
+        && d.profile.email is string
+        && d.profile.email == request.auth.token.email
+        && d.preferences is map
+        && d.preferences.keys().hasOnly(['timezone', 'defaultCurrency', 'theme'])
+        && d.preferences.timezone is string
+        && d.preferences.timezone.size() >= 1
+        && d.preferences.timezone.size() <= 64
+        && d.preferences.defaultCurrency is string
+        && d.preferences.defaultCurrency.matches('^[A-Z]{3}$')
+        && d.preferences.theme in ['dark', 'light', 'system']
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    /* ───────────── Negocios ───────────── */
+
+    // Reparto opcional: o no existe/es null, o son tres porcentajes en puntos base que suman exactamente 10 000.
+    function validAllocation(a) {
+      return a == null
+        || (a is map
+            && a.keys().hasOnly(['reserveBps', 'reinvestBps', 'ownerBps'])
+            && a.reserveBps is int && a.reinvestBps is int && a.ownerBps is int
+            && a.reserveBps >= 0 && a.reinvestBps >= 0 && a.ownerBps >= 0
+            && a.reserveBps + a.reinvestBps + a.ownerBps == 10000);
+    }
+
+    function validBusiness(d) {
+      return d.keys().hasOnly(['name', 'description', 'type', 'currency', 'startDate', 'status', 'payout', 'reserve', 'tax', 'inventoryMethod', 'allocation', 'notes', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['name', 'description', 'type', 'currency', 'startDate', 'status', 'payout', 'reserve', 'tax', 'inventoryMethod', 'notes', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 80
+        && d.description is string && d.description.size() <= 300
+        && d.type in ['physical', 'digital', 'service', 'training', 'mentoring', 'trading', 'other']
+        && d.currency == 'USD'
+        && isDateStr(d.startDate)
+        && d.status in ['active', 'archived']
+        && d.payout is map
+        && d.payout.keys().hasOnly(['method', 'frequency', 'customDays'])
+        && d.payout.method in ['owner_draw', 'salary', 'compensation', 'distribution']
+        && d.payout.frequency in ['weekly', 'biweekly', 'monthly', 'custom']
+        && (d.payout.customDays == null || (d.payout.customDays is int && d.payout.customDays >= 1 && d.payout.customDays <= 365))
+        && d.reserve is map
+        && d.reserve.keys().hasOnly(['minReserveMinor'])
+        && d.reserve.minReserveMinor is int && d.reserve.minReserveMinor >= 0 && d.reserve.minReserveMinor <= 100000000000
+        && d.tax is map
+        && d.tax.keys().hasOnly(['enabled', 'label', 'rateBps', 'pricesIncludeTax'])
+        && d.tax.enabled is bool
+        && d.tax.label is string && d.tax.label.size() <= 30
+        && d.tax.rateBps is int && d.tax.rateBps >= 0 && d.tax.rateBps <= 10000
+        && d.tax.pricesIncludeTax is bool
+        && d.inventoryMethod == 'weighted_average'
+        && (!('allocation' in d) || validAllocation(d.allocation))
+        && d.notes is string && d.notes.size() <= 1000
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    /* ───────────── Cuentas ───────────── */
+
+    function validAccount(uid, d) {
+      return d.keys().hasOnly(['name', 'scope', 'businessId', 'accountType', 'currency', 'openingBalanceMinor', 'openingBalanceDate', 'status', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['name', 'scope', 'businessId', 'accountType', 'currency', 'openingBalanceMinor', 'openingBalanceDate', 'status', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 80
+        && d.scope in ['personal', 'business']
+        && (
+          (d.scope == 'personal' && d.businessId == null)
+          || (d.scope == 'business' && d.businessId is string
+              && exists(/databases/$(database)/documents/users/$(uid)/businesses/$(d.businessId)))
+        )
+        && d.accountType in ['cash', 'bank', 'wallet', 'processor', 'investment', 'other']
+        && d.currency == 'USD'
+        && isMinor(d.openingBalanceMinor)
+        && isDateStr(d.openingBalanceDate)
+        && d.status in ['active', 'archived']
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    /* ───────────── Categorías ───────────── */
+
+    function validCategory(d) {
+      return d.keys().hasOnly(['name', 'kind', 'scope', 'businessId', 'color', 'active', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['name', 'kind', 'scope', 'businessId', 'color', 'active', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 60
+        && d.kind in ['income', 'expense']
+        && d.scope in ['shared', 'personal', 'business']
+        && ((d.scope == 'business' && d.businessId is string) || (d.scope != 'business' && d.businessId == null))
+        && d.color is string && d.color.matches('^#[0-9a-fA-F]{6}$')
+        && d.active is bool
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    /* ───────────── Movimientos ───────────── */
+
+    // La cuenta debe existir y el ámbito/negocio del movimiento debe coincidir con los de su cuenta.
+    function accountMatches(uid, d) {
+      let a = get(/databases/$(database)/documents/users/$(uid)/accounts/$(d.accountId)).data;
+      return a.scope == d.scope && a.businessId == d.businessId;
+    }
+
+    function validTx(uid, d) {
+      return d.keys().hasOnly(['type', 'scope', 'businessId', 'accountId', 'counterpartAccountId', 'transferId', 'transferPurpose', 'direction', 'date', 'amountMinor', 'currency', 'categoryId', 'status', 'description', 'counterparty', 'voidedAt', 'voidReason', 'recurringId', 'saleId', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['type', 'scope', 'businessId', 'accountId', 'counterpartAccountId', 'transferId', 'transferPurpose', 'direction', 'date', 'amountMinor', 'currency', 'categoryId', 'status', 'description', 'counterparty', 'voidedAt', 'voidReason', 'createdAt', 'updatedAt'])
+        && d.type in ['income', 'expense', 'transfer', 'capital_contribution', 'owner_withdrawal', 'salary_payment', 'investment', 'trading_withdrawal', 'tax_collected', 'inventory_purchase', 'refund', 'loan_received', 'loan_payment', 'tax_payment', 'adjustment']
+        && d.scope in ['personal', 'business']
+        && ((d.scope == 'personal' && d.businessId == null) || (d.scope == 'business' && d.businessId is string))
+        && d.accountId is string
+        && accountMatches(uid, d)
+        && (!(d.type in ['capital_contribution', 'owner_withdrawal', 'salary_payment', 'tax_collected', 'inventory_purchase']) || d.scope == 'business')
+        && d.amountMinor is int && d.amountMinor > 0 && d.amountMinor <= 100000000000
+        && d.currency == 'USD'
+        && isDateStr(d.date)
+        && d.status in ['planned', 'pending', 'confirmed', 'cancelled', 'reconciled']
+        && d.description is string && d.description.size() <= 200
+        && d.counterparty is string && d.counterparty.size() <= 80
+        && (
+          (d.type == 'transfer'
+            && d.transferId is string && d.transferId.size() >= 1 && d.transferId.size() <= 40
+            && d.counterpartAccountId is string && d.counterpartAccountId != d.accountId
+            && exists(/databases/$(database)/documents/users/$(uid)/accounts/$(d.counterpartAccountId))
+            && d.transferPurpose in ['internal', 'owner_withdrawal', 'salary', 'capital_contribution', 'investment_deposit']
+            && d.direction in ['in', 'out']
+            && d.categoryId == null)
+          ||
+          (d.type != 'transfer'
+            && d.transferId == null && d.counterpartAccountId == null && d.transferPurpose == null
+            && (d.type == 'adjustment' ? d.direction in ['in', 'out'] : d.direction == null)
+            && (d.categoryId == null || d.categoryId is string))
+        )
+        && (
+          (d.status == 'cancelled' && d.voidedAt == request.time && d.voidReason is string && d.voidReason.size() >= 3 && d.voidReason.size() <= 150)
+          ||
+          (d.status != 'cancelled' && d.voidedAt == null && d.voidReason == null)
+        )
+        && (!('recurringId' in d) || d.recurringId == null || (d.recurringId is string && d.recurringId.size() <= 80))
+        && (!('saleId' in d) || d.saleId == null || (d.saleId is string && d.saleId.size() <= 80))
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    // Un movimiento confirmado es inmutable: solo puede anularse; nada de su contenido económico cambia.
+    function frozenCore(before, after) {
+      return before.type == after.type
+        && before.scope == after.scope
+        && before.businessId == after.businessId
+        && before.accountId == after.accountId
+        && before.counterpartAccountId == after.counterpartAccountId
+        && before.transferId == after.transferId
+        && before.transferPurpose == after.transferPurpose
+        && before.direction == after.direction
+        && before.date == after.date
+        && before.amountMinor == after.amountMinor
+        && before.currency == after.currency
+        && before.categoryId == after.categoryId
+        && before.description == after.description
+        && before.counterparty == after.counterparty;
+    }
+
+    /* ───────────── Productos y ventas ───────────── */
+
+    function validProduct(uid, d) {
+      return d.keys().hasOnly(['name', 'sku', 'businessId', 'unitPriceMinor', 'unitCostMinor', 'active', 'trackStock', 'reorderPoint', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['name', 'sku', 'businessId', 'unitPriceMinor', 'unitCostMinor', 'active', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 80
+        && d.sku is string && d.sku.size() <= 40
+        && d.businessId is string
+        && exists(/databases/$(database)/documents/users/$(uid)/businesses/$(d.businessId))
+        && d.unitPriceMinor is int && d.unitPriceMinor >= 0 && d.unitPriceMinor <= 100000000000
+        && (d.unitCostMinor == null || (d.unitCostMinor is int && d.unitCostMinor >= 0 && d.unitCostMinor <= 100000000000))
+        && d.active is bool
+        && (!('trackStock' in d) || d.trackStock is bool)
+        && (!('reorderPoint' in d) || d.reorderPoint == null || (d.reorderPoint is int && d.reorderPoint >= 0 && d.reorderPoint <= 1000000))
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    // La venta es un registro inmutable. Sus montos deben cuadrar: total = ingreso propio + impuesto.
+    // (Las reglas no pueden recorrer cada línea; el contenido de las líneas lo valida la aplicación.)
+    function validSale(uid, d) {
+      return d.keys().hasOnly(['businessId', 'accountId', 'date', 'customer', 'lines', 'discountMinor', 'taxEnabled', 'taxLabel', 'taxRateBps', 'pricesIncludeTax', 'netMinor', 'taxMinor', 'totalMinor', 'costMinor', 'units', 'categoryId', 'notes', 'createdAt'])
+        && d.keys().hasAll(['businessId', 'accountId', 'date', 'customer', 'lines', 'discountMinor', 'taxEnabled', 'taxLabel', 'taxRateBps', 'pricesIncludeTax', 'netMinor', 'taxMinor', 'totalMinor', 'costMinor', 'units', 'categoryId', 'notes', 'createdAt'])
+        && d.businessId is string
+        && d.accountId is string
+        && get(/databases/$(database)/documents/users/$(uid)/accounts/$(d.accountId)).data.businessId == d.businessId
+        && isDateStr(d.date)
+        && d.customer is string && d.customer.size() <= 80
+        && d.lines is list && d.lines.size() >= 1 && d.lines.size() <= 50
+        && d.discountMinor is int && d.discountMinor >= 0
+        && d.taxEnabled is bool
+        && d.taxLabel is string && d.taxLabel.size() <= 30
+        && d.taxRateBps is int && d.taxRateBps >= 0 && d.taxRateBps <= 10000
+        && d.pricesIncludeTax is bool
+        && d.netMinor is int && d.netMinor > 0 && d.netMinor <= 100000000000
+        && d.taxMinor is int && d.taxMinor >= 0
+        && d.totalMinor is int && d.totalMinor == d.netMinor + d.taxMinor
+        && (d.costMinor == null || (d.costMinor is int && d.costMinor >= 0))
+        && d.units is int && d.units >= 1
+        && (d.categoryId == null || d.categoryId is string)
+        && d.notes is string && d.notes.size() <= 300
+        && d.createdAt == request.time;
+    }
+
+    /* ───────────── Stock, cierres y metas ───────────── */
+
+    // Movimiento de unidades: inmutable. (Sin lecturas cruzadas: una venta puede generar hasta 50 movimientos de golpe.)
+    function validMove(d) {
+      return d.keys().hasOnly(['productId', 'businessId', 'date', 'kind', 'quantity', 'totalCostMinor', 'saleId', 'txId', 'supplier', 'note', 'createdAt'])
+        && d.keys().hasAll(['productId', 'businessId', 'date', 'kind', 'quantity', 'totalCostMinor', 'saleId', 'txId', 'supplier', 'note', 'createdAt'])
+        && d.productId is string && d.businessId is string
+        && isDateStr(d.date)
+        && d.kind in ['opening', 'purchase', 'sale', 'return', 'adjustment']
+        && d.quantity is int && d.quantity != 0 && d.quantity >= -1000000 && d.quantity <= 1000000
+        && d.totalCostMinor is int && d.totalCostMinor >= 0 && d.totalCostMinor <= 100000000000
+        && ((d.kind in ['opening', 'purchase', 'return']) ? d.quantity > 0 : true)
+        && ((d.kind == 'sale') ? (d.quantity < 0 && d.saleId is string) : d.saleId == null)
+        && (d.txId == null || d.txId is string)
+        && d.supplier is string && d.supplier.size() <= 80
+        && d.note is string && d.note.size() <= 200
+        && d.createdAt == request.time;
+    }
+
+    function validClosing(id, d) {
+      return d.keys().hasOnly(['businessId', 'month', 'from', 'to', 'netIncomeMinor', 'expensesMinor', 'cogsMinor', 'baseMinor', 'cashNowMinor', 'minReserveMinor', 'upcomingMinor', 'surplusMinor', 'allocatableMinor', 'ownerMinor', 'reinvestMinor', 'reserveMinor', 'heldBackMinor', 'policy', 'note', 'createdAt'])
+        && d.keys().hasAll(['businessId', 'month', 'from', 'to', 'netIncomeMinor', 'expensesMinor', 'cogsMinor', 'baseMinor', 'cashNowMinor', 'minReserveMinor', 'upcomingMinor', 'surplusMinor', 'allocatableMinor', 'ownerMinor', 'reinvestMinor', 'reserveMinor', 'heldBackMinor', 'policy', 'note', 'createdAt'])
+        && d.businessId is string
+        && d.month is string && d.month.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')
+        && id == d.businessId + '_' + d.month
+        && isDateStr(d.from) && isDateStr(d.to) && d.from <= d.to
+        && isMinor(d.netIncomeMinor) && isMinor(d.expensesMinor) && isMinor(d.cogsMinor)
+        && d.baseMinor is int && d.baseMinor >= 0
+        && isMinor(d.cashNowMinor) && d.minReserveMinor is int && d.minReserveMinor >= 0 && d.upcomingMinor is int && d.upcomingMinor >= 0
+        && d.surplusMinor is int && d.surplusMinor >= 0
+        && d.allocatableMinor is int && d.allocatableMinor >= 0 && d.allocatableMinor <= d.baseMinor
+        && d.ownerMinor is int && d.ownerMinor >= 0 && d.reinvestMinor is int && d.reinvestMinor >= 0 && d.reserveMinor is int && d.reserveMinor >= 0
+        && d.ownerMinor + d.reinvestMinor + d.reserveMinor == d.allocatableMinor
+        && d.heldBackMinor == d.baseMinor - d.allocatableMinor
+        && validAllocation(d.policy) && d.policy != null
+        && d.note is string && d.note.size() <= 300
+        && d.createdAt == request.time;
+    }
+
+    function validGoal(d) {
+      return d.keys().hasOnly(['name', 'kind', 'businessId', 'targetMinor', 'targetDate', 'active', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['name', 'kind', 'businessId', 'targetMinor', 'targetDate', 'active', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 80
+        && d.kind in ['cash', 'monthly_result', 'monthly_revenue']
+        && (d.businessId == null || d.businessId is string)
+        && d.targetMinor is int && d.targetMinor > 0 && d.targetMinor <= 100000000000
+        && (d.targetDate == null || isDateStr(d.targetDate))
+        && d.active is bool
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    /* ───────────── Pagos fijos y tareas ───────────── */
+
+    function validRecurring(uid, d) {
+      return d.keys().hasOnly(['name', 'type', 'accountId', 'scope', 'businessId', 'amountMinor', 'frequency', 'startDate', 'endDate', 'categoryId', 'description', 'active', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['name', 'type', 'accountId', 'scope', 'businessId', 'amountMinor', 'frequency', 'startDate', 'endDate', 'categoryId', 'description', 'active', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 80
+        && d.type in ['expense', 'income', 'tax_payment', 'loan_payment']
+        && d.scope in ['personal', 'business']
+        && ((d.scope == 'personal' && d.businessId == null) || (d.scope == 'business' && d.businessId is string))
+        && d.accountId is string
+        && accountMatches(uid, d)
+        && d.amountMinor is int && d.amountMinor > 0 && d.amountMinor <= 100000000000
+        && d.frequency in ['weekly', 'every15', 'monthly', 'yearly']
+        && isDateStr(d.startDate)
+        && (d.endDate == null || (isDateStr(d.endDate) && d.endDate >= d.startDate))
+        && (d.categoryId == null || d.categoryId is string)
+        && d.description is string && d.description.size() <= 200
+        && d.active is bool
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    function validTask(d) {
+      return d.keys().hasOnly(['title', 'dueDate', 'businessId', 'notes', 'done', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['title', 'dueDate', 'businessId', 'notes', 'done', 'createdAt', 'updatedAt'])
+        && d.title is string && d.title.size() >= 2 && d.title.size() <= 120
+        && (d.dueDate == null || isDateStr(d.dueDate))
+        && (d.businessId == null || d.businessId is string)
+        && d.notes is string && d.notes.size() <= 500
+        && d.done is bool
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    /* ───────────── Auditoría ───────────── */
+
+    function validAudit(d) {
+      return d.keys().hasOnly(['action', 'entityType', 'entityId', 'summary', 'createdAt'])
+        && d.keys().hasAll(['action', 'entityType', 'entityId', 'summary', 'createdAt'])
+        && d.action in ['create', 'update', 'confirm', 'void', 'archive', 'restore', 'delete']
+        && d.entityType in ['businesses', 'accounts', 'categories', 'transactions', 'recurring', 'tasks', 'products', 'sales', 'inventoryMoves', 'closings', 'goals']
+        && d.entityId is string && d.entityId.size() >= 1 && d.entityId.size() <= 80
+        && d.summary is string && d.summary.size() <= 200
+        && d.createdAt == request.time;
+    }
+
+    /* ───────────── Rutas ───────────── */
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid) && validUserDoc(request.resource.data) && isCreateStamp(request.resource.data);
+      allow update: if isOwner(uid) && validUserDoc(request.resource.data) && isUpdateStamp(request.resource.data);
+      allow delete: if false;
+
+      match /businesses/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validBusiness(request.resource.data) && isCreateStamp(request.resource.data);
+        allow update: if isOwner(uid) && validBusiness(request.resource.data) && isUpdateStamp(request.resource.data);
+        allow delete: if false;
+      }
+
+      match /accounts/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validAccount(uid, request.resource.data) && isCreateStamp(request.resource.data);
+        // El ámbito y el negocio de una cuenta no cambian: los movimientos los heredan.
+        allow update: if isOwner(uid) && validAccount(uid, request.resource.data) && isUpdateStamp(request.resource.data)
+          && request.resource.data.scope == resource.data.scope
+          && request.resource.data.businessId == resource.data.businessId;
+        allow delete: if false;
+      }
+
+      match /categories/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validCategory(request.resource.data) && isCreateStamp(request.resource.data);
+        allow update: if isOwner(uid) && validCategory(request.resource.data) && isUpdateStamp(request.resource.data)
+          && request.resource.data.kind == resource.data.kind;
+        allow delete: if false;
+      }
+
+      match /transactions/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validTx(uid, request.resource.data) && isCreateStamp(request.resource.data)
+          && request.resource.data.status in ['planned', 'pending', 'confirmed'];
+        allow update: if isOwner(uid) && validTx(uid, request.resource.data) && isUpdateStamp(request.resource.data)
+          && (
+            // Planificado o pendiente: editable, confirmable o anulable (sin cambiar su tipo ni su transferencia).
+            (resource.data.status in ['planned', 'pending']
+              && request.resource.data.status in ['planned', 'pending', 'confirmed', 'cancelled']
+              && request.resource.data.type == resource.data.type
+              && request.resource.data.transferId == resource.data.transferId)
+            ||
+            // Confirmado o conciliado: solo anulación, con el contenido económico congelado.
+            (resource.data.status in ['confirmed', 'reconciled']
+              && request.resource.data.status == 'cancelled'
+              && frozenCore(resource.data, request.resource.data))
+          );
+        // Nunca se borra un movimiento: se anula y queda en el historial.
+        allow delete: if false;
+      }
+
+      match /products/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validProduct(uid, request.resource.data) && isCreateStamp(request.resource.data);
+        // El producto no cambia de negocio; no se borra, se desactiva.
+        allow update: if isOwner(uid) && validProduct(uid, request.resource.data) && isUpdateStamp(request.resource.data)
+          && request.resource.data.businessId == resource.data.businessId;
+        allow delete: if false;
+      }
+
+      match /sales/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validSale(uid, request.resource.data);
+        // Una venta no se edita ni se borra: se anula anulando sus movimientos.
+        allow update, delete: if false;
+      }
+
+      match /inventoryMoves/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validMove(request.resource.data);
+        // El stock es un historial: no se edita ni se borra; se corrige con un ajuste.
+        allow update, delete: if false;
+      }
+
+      match /closings/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validClosing(id, request.resource.data);
+        allow update, delete: if false;
+      }
+
+      match /goals/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validGoal(request.resource.data) && isCreateStamp(request.resource.data);
+        allow update: if isOwner(uid) && validGoal(request.resource.data) && isUpdateStamp(request.resource.data);
+        allow delete: if false;
+      }
+
+      match /recurring/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validRecurring(uid, request.resource.data) && isCreateStamp(request.resource.data);
+        allow update: if isOwner(uid) && validRecurring(uid, request.resource.data) && isUpdateStamp(request.resource.data);
+        // Un pago fijo no se borra: se pausa. Sus movimientos ya generados siguen existiendo.
+        allow delete: if false;
+      }
+
+      match /tasks/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validTask(request.resource.data) && isCreateStamp(request.resource.data);
+        allow update: if isOwner(uid) && validTask(request.resource.data) && isUpdateStamp(request.resource.data);
+        allow delete: if isOwner(uid);
+      }
+
+      match /auditLogs/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validAudit(request.resource.data);
+        allow update, delete: if false;
+      }
+    }
+
+    // Todo lo demás, denegado.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
