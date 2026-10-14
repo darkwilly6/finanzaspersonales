@@ -48,3 +48,14 @@ export function averageMonthly(months: readonly MonthlyBaseline[]): MonthlyBasel
   const sum = (f: (m: MonthlyBaseline) => number) => Math.round(months.reduce((s, m) => s + f(m), 0) / n)
   return { netIncomeMinor: sum((m) => m.netIncomeMinor), expensesMinor: sum((m) => m.expensesMinor), cogsMinor: sum((m) => m.cogsMinor) }
 }
+
+export interface MonthActivity { netIncomeMinor: number; expensesMinor: number; cogsMinor: number }
+
+/**
+ * Quita los meses vacíos del principio (antes de que el negocio tuviera movimientos).
+ * Así los promedios no se diluyen con meses en los que el negocio todavía no existía en la app.
+ */
+export function trimLeadingEmpty<T extends MonthActivity>(months: readonly T[]): T[] {
+  const first = months.findIndex((m) => m.netIncomeMinor !== 0 || m.expensesMinor !== 0 || m.cogsMinor !== 0)
+  return first < 0 ? [] : months.slice(first)
+}
