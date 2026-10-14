@@ -4,13 +4,16 @@ import { getFirestore, type Firestore } from 'firebase/firestore'
 
 const env = import.meta.env
 
+const clean = (v: unknown): string | undefined =>
+  typeof v === 'string' ? v.trim() : undefined
+
 const config = {
-  apiKey: env.VITE_FIREBASE_API_KEY as string | undefined,
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined,
-  projectId: env.VITE_FIREBASE_PROJECT_ID as string | undefined,
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET as string | undefined,
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID as string | undefined,
-  appId: env.VITE_FIREBASE_APP_ID as string | undefined,
+  apiKey: clean(env.VITE_FIREBASE_API_KEY),
+  authDomain: clean(env.VITE_FIREBASE_AUTH_DOMAIN),
+  projectId: clean(env.VITE_FIREBASE_PROJECT_ID),
+  storageBucket: clean(env.VITE_FIREBASE_STORAGE_BUCKET),
+  messagingSenderId: clean(env.VITE_FIREBASE_MESSAGING_SENDER_ID),
+  appId: clean(env.VITE_FIREBASE_APP_ID),
 }
 
 /** Variables obligatorias que faltan o siguen con el valor de ejemplo. */
