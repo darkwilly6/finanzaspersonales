@@ -17,6 +17,15 @@ export function normalizeTheme(value: unknown): ThemePreference {
   return value === 'light' || value === 'system' || value === 'dark' ? value : 'dark'
 }
 
+/** Perfil inicial de una cuenta nueva. */
+export function freshProfile(email: string, displayName: string): UserProfileDoc {
+  return {
+    schemaVersion: 1,
+    profile: { displayName: displayName || email.split('@')[0] || 'Usuario', email },
+    preferences: { timezone: defaultTimezone(), defaultCurrency: 'USD', theme: 'dark' },
+  }
+}
+
 /**
  * Lee el documento de usuario; si no existe lo crea con valores por defecto.
  * El uid siempre viene de la sesión autenticada, nunca de un campo editable.
@@ -44,11 +53,7 @@ export async function loadOrCreateUserProfile(
     }
   }
 
-  const fresh: UserProfileDoc = {
-    schemaVersion: 1,
-    profile: { displayName: displayName || email.split('@')[0] || 'Usuario', email },
-    preferences: { timezone: defaultTimezone(), defaultCurrency: 'USD', theme: 'dark' },
-  }
+  const fresh = freshProfile(email, displayName)
   await setDoc(ref, { ...fresh, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
   return fresh
 }

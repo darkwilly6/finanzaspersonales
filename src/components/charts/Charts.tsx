@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { formatMinor } from '../../domain/calculations/money'
 import type { CategorySlice } from '../../domain/calculations/analytics'
 
@@ -65,7 +66,8 @@ export function BarsChart({ data, aLabel, bLabel, title }: { data: BarDatum[]; a
 export interface LineDatum { date: string; value: number }
 
 /** Línea de saldo proyectado. Sombrea en rojo la zona bajo cero y marca el mínimo. */
-export function LineChart({ data, title }: { data: LineDatum[]; title: string }) {
+export function LineChart({ data, title, area = false, finalLabel }: { data: LineDatum[]; title: string; area?: boolean; finalLabel?: string }) {
+  const gid = useId().replace(/:/g, '')
   const W = 640, H = 220, L = 58, R = 12, T = 12, B = 26
   const pw = W - L - R, ph = H - T - B
   const vals = data.map((d) => d.value)
@@ -89,7 +91,26 @@ export function LineChart({ data, title }: { data: LineDatum[]; title: string })
             <text x={L - 8} y={y(v) + 4} textAnchor="end" className="axis-text">{compact(v)}</text>
           </g>
         ))}
+        {area && data.length > 1 ? (
+          <>
+            <defs>
+              <linearGradient id={`area-${gid}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.32" />
+                <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d={`${path} L${x(data.length - 1).toFixed(1)},${y(lo).toFixed(1)} L${x(0).toFixed(1)},${y(lo).toFixed(1)} Z`} fill={`url(#area-${gid})`} stroke="none" />
+          </>
+        ) : null}
         <path d={path} className="line" fill="none" />
+        {finalLabel && data.length > 1 ? (
+          <g className="chart-tip" transform={`translate(${Math.max(L, x(data.length - 1) - 176)},${Math.max(T, Math.min(y(vals[vals.length - 1]!) - 46, H - B - 40))})`}>
+            <rect width="170" height="38" rx="8" />
+            <text x="10" y="15" className="tip-title">Proyección final</text>
+            <text x="10" y="30" className="tip-value">{finalLabel}</text>
+          </g>
+        ) : null}
+        {finalLabel && data.length > 1 ? <circle cx={x(data.length - 1)} cy={y(vals[vals.length - 1]!)} r={4.5} className="pt-final" /> : null}
         {data.length > 0 ? <circle cx={x(minIdx)} cy={y(vals[minIdx]!)} r={4} className={vals[minIdx]! < 0 ? 'pt-neg' : 'pt'} /> : null}
         {labelIdx.map((i, k) => data[i] ? <text key={k} x={x(i)} y={H - 6} textAnchor={k === 0 ? 'start' : k === 2 ? 'end' : 'middle'} className="axis-text">{fmtDay(data[i]!.date)}</text> : null)}
       </svg>
@@ -110,5 +131,30 @@ export function ShareBars({ slices, empty }: { slices: CategorySlice[]; empty: s
         </li>
       ))}
     </ul>
+  )
+}
+
+
+/** Mini gráfica de tendencia (sin ejes) para las tarjetas del panel. */
+export function Sparkline({ values, label }: { values: number[]; label: string }) {
+  const gid = useId().replace(/:/g, '')
+  if (values.length < 2) return null
+  const W = 160, H = 56, P = 4
+  const min = Math.min(...values), max = Math.max(...values)
+  const span = max - min || 1
+  const x = (i: number) => P + (i / (values.length - 1)) * (W - 2 * P)
+  const y = (v: number) => (max === min ? H / 2 : H - P - ((v - min) / span) * (H - 2 * P))
+  const line = values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+  return (
+    <svg className="sparkline" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={`sp-${gid}`} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${line} L${x(values.length - 1)},${H} L${x(0)},${H} Z`} fill={`url(#sp-${gid})`} />
+      <path d={line} className="spark-line" fill="none" />
+    </svg>
   )
 }

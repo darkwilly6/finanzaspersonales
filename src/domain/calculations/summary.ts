@@ -18,6 +18,9 @@ export interface LedgerSummary {
   netIncome: number
   /** Gastos operativos pagados. */
   expenses: number
+  /** Del total de gastos: los pagados desde cuentas de negocio y desde cuentas personales. */
+  expensesBusiness: number
+  expensesPersonal: number
   /** Ingresos netos − gastos operativos − costo de lo vendido (si se aplicó). Base efectivo; no es el beneficio contable completo. */
   operatingResult: number
   ownerWithdrawals: number
@@ -40,7 +43,7 @@ export interface LedgerSummary {
 }
 
 const zero = (): LedgerSummary => ({
-  income: 0, refunds: 0, tradingWithdrawals: 0, taxCollected: 0, inventoryPurchases: 0, cogs: 0, cogsUnknownSales: 0, netIncome: 0, expenses: 0, operatingResult: 0,
+  income: 0, refunds: 0, tradingWithdrawals: 0, taxCollected: 0, inventoryPurchases: 0, cogs: 0, cogsUnknownSales: 0, netIncome: 0, expenses: 0, expensesBusiness: 0, expensesPersonal: 0, operatingResult: 0,
   ownerWithdrawals: 0, ownerSalary: 0, capitalContributions: 0, investments: 0,
   loansReceived: 0, loanPrincipalPaid: 0, taxesPaid: 0, adjustmentsNet: 0,
   transfersInOther: 0, transfersOutOther: 0,
@@ -85,7 +88,11 @@ export function summarize(txs: readonly Transaction[], scopeAccountIds: Readonly
         case 'trading_withdrawal': s.tradingWithdrawals += amount; break
         case 'tax_collected': s.taxCollected += amount; break
         case 'inventory_purchase': s.inventoryPurchases += amount; break
-        case 'expense': s.expenses += amount; break
+        case 'expense':
+          s.expenses += amount
+          if (t.scope === 'personal') s.expensesPersonal += amount
+          else s.expensesBusiness += amount
+          break
         case 'owner_withdrawal': s.ownerWithdrawals += amount; break
         case 'salary_payment': s.ownerSalary += amount; break
         case 'capital_contribution': s.capitalContributions += amount; break
