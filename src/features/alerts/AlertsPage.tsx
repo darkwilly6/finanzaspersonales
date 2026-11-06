@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useLedger } from '../ledger/LedgerData'
 import { LedgerGate } from '../ledger/LedgerGate'
 import { useAlerts } from '../ledger/useInsights'
+import { BudgetsPanel } from './BudgetsPanel'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
 import { TextField, SelectField } from '../../components/ui/Field'
@@ -80,6 +81,7 @@ export function AlertsPage() {
     <div className="page wide">
       <header className="page-head"><div><h1>Alertas y tareas</h1><p className="muted">Las alertas se calculan solas con tus datos y desaparecen cuando el problema se resuelve. Las tareas las manejas tú.</p></div></header>
       <LedgerGate>
+        <BudgetsPanel />
         <section className="panel" aria-labelledby="alerts-title">
           <h2 id="alerts-title">Alertas ({alerts.length})</h2>
           {alerts.length === 0 ? <p className="muted">Todo en orden: no hay nada que requiera tu atención ahora.</p> : (

@@ -9,6 +9,8 @@ import { useToast } from '../../components/feedback/Toast'
 import { businessFormSchema, businessFormToDoc, type BusinessFormValues } from '../../domain/validation/ledger'
 import { BUSINESS_TYPES, BUSINESS_TYPE_LABELS, PAYOUT_FREQUENCIES, PAYOUT_FREQUENCY_LABELS, PAYOUT_METHODS, PAYOUT_METHOD_LABELS, type Business } from '../../domain/types/ledger'
 import { createBusiness, newId, updateBusiness } from '../../lib/ledgerRepo'
+import { PlanEditor, parseRows, rowsFromPlan, PCT_PROBLEM, type PlanRow } from './PlanEditor'
+import { aggregatePlan, PLAN_PROBLEM_TEXT, resolvePlan } from '../../domain/calculations/plan'
 import { humanizeFirebaseError } from '../../lib/errors'
 
 function toForm(b: Business | undefined, today: string): BusinessFormValues {
@@ -19,7 +21,7 @@ function toForm(b: Business | undefined, today: string): BusinessFormValues {
     name: b.name, description: b.description, type: b.type, startDate: b.startDate, payoutMethod: b.payout.method, payoutFrequency: b.payout.frequency,
     payoutCustomDays: b.payout.customDays ? String(b.payout.customDays) : '', minReserve: b.reserve.minReserveMinor ? (b.reserve.minReserveMinor / 100).toFixed(2) : '',
     taxEnabled: b.tax.enabled, taxLabel: b.tax.label || 'IVA', taxRate: b.tax.rateBps ? String(b.tax.rateBps / 100) : '', taxPricesInclude: b.tax.pricesIncludeTax ? 'included' : 'separate',
-    allocReserve: b.allocation ? String(b.allocation.reserveBps / 100) : '', allocReinvest: b.allocation ? String(b.allocation.reinvestBps / 100) : '', allocOwner: b.allocation ? String(b.allocation.ownerBps / 100) : '', notes: b.notes,
+    allocReserve: '', allocReinvest: '', allocOwner: '', notes: b.notes,
   }
 }
 
@@ -33,10 +35,20 @@ export function BusinessForm({ business, onDone }: { business?: Business; onDone
   const freq = watch('payoutFrequency')
   const taxOn = watch('taxEnabled')
   const type = watch('type')
+  const [planRows, setPlanRows] = useState<PlanRow[]>(() => rowsFromPlan(business ? resolvePlan(business) : null))
+  const [planError, setPlanError] = useState('')
 
   const onSubmit = handleSubmit(async (v) => {
     try {
-      const doc = businessFormToDoc(v, business?.status ?? 'active')
+      // Plan de uso del dinero: si hay filas deben ser válidas; el resumen en tres partes se deriva de él.
+      let plan = null as ReturnType<typeof parseRows>['buckets'] | null
+      if (planRows.length > 0) {
+        const parsed = parseRows(planRows)
+        if (parsed.problem) { setPlanError(parsed.problem === 'pct' ? PCT_PROBLEM : PLAN_PROBLEM_TEXT[parsed.problem]); return }
+        plan = parsed.buckets
+      }
+      setPlanError('')
+      const doc = { ...businessFormToDoc(v, business?.status ?? 'active'), plan, allocation: plan ? aggregatePlan(plan) : null }
       if (business) await updateBusiness(user!.uid, business.id, doc)
       else await createBusiness(user!.uid, newBusinessId, doc)
       notify('success', business ? 'Negocio actualizado.' : 'Negocio creado.')
@@ -72,15 +84,7 @@ export function BusinessForm({ business, onDone }: { business?: Business; onDone
         <TextField label="Reserva mínima de efectivo (USD)" inputMode="decimal" placeholder="0.00" hint="Efectivo que el negocio no debería bajar de este nivel. Se usará para calcular cuánto puedes pagarte." error={errors.minReserve?.message} {...register('minReserve')} />
       </fieldset>
 
-      <fieldset className="fieldset">
-        <legend>Reparto de lo que genera (opcional)</legend>
-        <p className="field-hint">Cómo repartir el excedente: reserva, reinversión y lo que te corresponde. Los tres deben sumar 100. Déjalo vacío si aún no lo defines: Capital OS no inventa porcentajes.</p>
-        <div className="grid-3">
-          <TextField label="Reserva (%)" inputMode="decimal" error={errors.allocReserve?.message} {...register('allocReserve')} />
-          <TextField label="Reinversión (%)" inputMode="decimal" error={errors.allocReinvest?.message} {...register('allocReinvest')} />
-          <TextField label="Para mí (%)" inputMode="decimal" error={errors.allocOwner?.message} {...register('allocOwner')} />
-        </div>
-      </fieldset>
+      <PlanEditor rows={planRows} onChange={(r) => { setPlanRows(r); setPlanError('') }} businessType={type} error={planError} />
 
       <fieldset className="fieldset">
         <legend>Impuestos indirectos (opcional)</legend>

@@ -102,7 +102,7 @@ describe('DashboardPage', () => {
 
   it('sin reparto definido, la sugerencia lo pide en lugar de inventar una', () => {
     open()
-    expect(screen.getByText(/define el reparto/i)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /configurar reparto/i })).toHaveAttribute('href', '/negocios')
+    expect(screen.getByText(/define el plan de uso del dinero/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /configurar plan/i })).toHaveAttribute('href', '/negocios')
   })
 })

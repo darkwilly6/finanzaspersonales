@@ -28,6 +28,7 @@ const StockPage = lazy(() => import('../features/stock/StockPage').then((m) => (
 const ClosingPage = lazy(() => import('../features/closing/ClosingPage').then((m) => ({ default: m.ClosingPage })))
 const ScalingPage = lazy(() => import('../features/scaling/ScalingPage').then((m) => ({ default: m.ScalingPage })))
 const ExportPage = lazy(() => import('../features/export/ExportPage').then((m) => ({ default: m.ExportPage })))
+const PlanPage = lazy(() => import('../features/plan/PlanPage').then((m) => ({ default: m.PlanPage })))
 const AlertsPage = lazy(() => import('../features/alerts/AlertsPage').then((m) => ({ default: m.AlertsPage })))
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 
@@ -64,6 +65,7 @@ export function App() {
                 <Route path="inventario" element={<ProductsPage />} />
                 <Route path="stock" element={<StockPage />} />
                 <Route path="cierre" element={<ClosingPage />} />
+                <Route path="plan" element={<PlanPage />} />
                 <Route path="escalado" element={<ScalingPage />} />
                 <Route path="exportar" element={<ExportPage />} />
                 <Route path="configuracion" element={<SettingsPage />} />

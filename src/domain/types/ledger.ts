@@ -43,6 +43,8 @@ export interface BusinessDoc {
   inventoryMethod: 'weighted_average'
   /** Reparto de lo que genera el negocio (en puntos base, suma 10 000). null = sin configurar. */
   allocation?: { reserveBps: number; reinvestBps: number; ownerBps: number } | null
+  /** Plan de uso del dinero (detalle del reparto). Si existe, `allocation` es su resumen en tres partes. */
+  plan?: PlanBucket[] | null
   notes: string
 }
 export type Business = BusinessDoc & { id: string }
@@ -315,3 +317,31 @@ export interface GoalDoc {
   active: boolean
 }
 export type Goal = GoalDoc & { id: string }
+
+/* ───────────── Plan de uso del dinero y límites de gasto ───────────── */
+
+export const PLAN_KINDS = ['owner', 'reserve', 'use'] as const
+export type PlanKind = (typeof PLAN_KINDS)[number]
+export const PLAN_KIND_LABELS: Record<PlanKind, string> = {
+  owner: 'Para mí (mi pago)',
+  reserve: 'Reserva (se queda en el negocio)',
+  use: 'Uso del negocio (publicidad, inventario…)',
+}
+/** Una parte del reparto: un nombre, qué tipo de destino es y su porcentaje en puntos base (10 000 = 100 %). */
+export interface PlanBucket { id: string; name: string; kind: PlanKind; bps: number }
+
+export const BUDGET_PERIODS = ['day', 'week', 'month'] as const
+export type BudgetPeriod = (typeof BUDGET_PERIODS)[number]
+export const BUDGET_PERIOD_LABELS: Record<BudgetPeriod, string> = { day: 'Día', week: 'Semana', month: 'Mes' }
+
+export interface BudgetDoc {
+  name: string
+  period: BudgetPeriod
+  /** 'all' = todo; 'personal'; o el id de un negocio. */
+  scope: string
+  /** Si se indica, solo cuenta gastos de esa categoría. */
+  categoryId: string | null
+  limitMinor: number
+  active: boolean
+}
+export type Budget = BudgetDoc & { id: string }

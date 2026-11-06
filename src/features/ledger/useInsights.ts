@@ -5,6 +5,7 @@ import { forecastCash, type ForecastResult } from '../../domain/calculations/for
 import { buildAlerts, type Alert } from '../../domain/calculations/alerts'
 import type { Account } from '../../domain/types/ledger'
 import { stockRows } from '../../domain/calculations/inventory'
+import { budgetStatus } from '../../domain/calculations/budgets'
 
 const isCash = (a: Account) => a.status === 'active' && a.accountType !== 'investment'
 
@@ -20,10 +21,11 @@ export function useScopedForecast(days: number): ForecastResult {
 
 /** Alertas globales: no dependen de los filtros, así ninguna queda oculta por un filtro. */
 export function useAlerts(): Alert[] {
-  const { accounts, balances, businesses, transactions, recurring, today, truncated, products, stock } = useLedger()
+  const { accounts, balances, businesses, transactions, recurring, today, truncated, products, stock, budgets } = useLedger()
   return useMemo(() => {
     const forecast = forecastCash({ accounts: accounts.filter(isCash), balanceOf: (id) => balances.get(id)?.balanceMinor ?? 0, transactions, recurring, today, days: 30 })
     const lowStock = stockRows(products.filter((p) => p.active), stock).filter((r) => r.low).map((r) => ({ name: r.product.name, units: r.units, reorderPoint: r.product.reorderPoint ?? 0 }))
-    return buildAlerts({ accounts, balances, businesses, transactions, recurring, forecast, today, truncated, lowStock })
-  }, [accounts, balances, businesses, transactions, recurring, today, truncated, products, stock])
+    const budgetStatuses = budgets.filter((b) => b.active).map((b) => budgetStatus(b, accounts, transactions, today))
+    return buildAlerts({ accounts, balances, businesses, transactions, recurring, forecast, today, truncated, lowStock, budgets: budgetStatuses })
+  }, [accounts, balances, businesses, transactions, recurring, today, truncated, products, stock, budgets])
 }

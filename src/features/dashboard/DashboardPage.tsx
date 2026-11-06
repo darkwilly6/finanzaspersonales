@@ -244,17 +244,17 @@ export function DashboardPage() {
             <section className="suggest" aria-labelledby="sg-title">
               <span className="suggest-icon" aria-hidden><TrendingUp size={22} /></span>
               <div>
-                <h2 id="sg-title">Sugerencia según tu reparto</h2>
+                <h2 id="sg-title">Sugerencia según tu plan</h2>
                 {suggestion.pick ? (
                   <p>Según tus porcentajes, <b>{suggestion.pick.name}</b> puede reinvertir <b>{money(suggestion.pick.reinvestMinor)}</b> este mes sin tocar su reserva mínima ni los pagos que vienen en 30 días.</p>
                 ) : suggestion.hasPolicy ? (
                   <p>Por ahora ningún negocio tiene excedente para reinvertir este mes: primero se protegen la reserva y los pagos que vienen.</p>
                 ) : (
-                  <p>Define el reparto (reserva, reinversión y lo que te corresponde) en la configuración de tus negocios para recibir sugerencias.</p>
+                  <p>Define el plan de uso del dinero (para ti, reserva y usos como publicidad o inventario) en la configuración de tus negocios para recibir sugerencias.</p>
                 )}
                 <p className="tiny muted">Es una regla basada en tus propios números, no una predicción ni asesoría financiera.</p>
               </div>
-              <Link to={suggestion.hasPolicy ? '/cierre' : '/negocios'} className="btn btn-secondary btn-sm">{suggestion.hasPolicy ? 'Ver cierre' : 'Configurar reparto'}</Link>
+              <Link to={suggestion.hasPolicy ? '/plan' : '/negocios'} className="btn btn-secondary btn-sm">{suggestion.hasPolicy ? 'Ver mi plan' : 'Configurar plan'}</Link>
             </section>
           </>
         ) : null}

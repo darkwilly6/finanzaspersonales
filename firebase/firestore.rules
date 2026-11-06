@@ -68,7 +68,7 @@ service cloud.firestore {
     }
 
     function validBusiness(d) {
-      return d.keys().hasOnly(['name', 'description', 'type', 'currency', 'startDate', 'status', 'payout', 'reserve', 'tax', 'inventoryMethod', 'allocation', 'notes', 'createdAt', 'updatedAt'])
+      return d.keys().hasOnly(['name', 'description', 'type', 'currency', 'startDate', 'status', 'payout', 'reserve', 'tax', 'inventoryMethod', 'allocation', 'plan', 'notes', 'createdAt', 'updatedAt'])
         && d.keys().hasAll(['name', 'description', 'type', 'currency', 'startDate', 'status', 'payout', 'reserve', 'tax', 'inventoryMethod', 'notes', 'createdAt', 'updatedAt'])
         && d.name is string && d.name.size() >= 2 && d.name.size() <= 80
         && d.description is string && d.description.size() <= 300
@@ -92,6 +92,7 @@ service cloud.firestore {
         && d.tax.pricesIncludeTax is bool
         && d.inventoryMethod == 'weighted_average'
         && (!('allocation' in d) || validAllocation(d.allocation))
+        && (!('plan' in d) || d.plan == null || (d.plan is list && d.plan.size() >= 1 && d.plan.size() <= 10))
         && d.notes is string && d.notes.size() <= 1000
         && d.createdAt is timestamp
         && d.updatedAt is timestamp;
@@ -295,6 +296,19 @@ service cloud.firestore {
         && d.updatedAt is timestamp;
     }
 
+    function validBudget(d) {
+      return d.keys().hasOnly(['name', 'period', 'scope', 'categoryId', 'limitMinor', 'active', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['name', 'period', 'scope', 'categoryId', 'limitMinor', 'active', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 60
+        && d.period in ['day', 'week', 'month']
+        && d.scope is string && d.scope.size() >= 1 && d.scope.size() <= 40
+        && (d.categoryId == null || d.categoryId is string)
+        && d.limitMinor is int && d.limitMinor > 0 && d.limitMinor <= 100000000000
+        && d.active is bool
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
     /* ───────────── Pagos fijos y tareas ───────────── */
 
     function validRecurring(uid, d) {
@@ -335,7 +349,7 @@ service cloud.firestore {
       return d.keys().hasOnly(['action', 'entityType', 'entityId', 'summary', 'createdAt'])
         && d.keys().hasAll(['action', 'entityType', 'entityId', 'summary', 'createdAt'])
         && d.action in ['create', 'update', 'confirm', 'void', 'archive', 'restore', 'delete']
-        && d.entityType in ['businesses', 'accounts', 'categories', 'transactions', 'recurring', 'tasks', 'products', 'sales', 'inventoryMoves', 'closings', 'goals']
+        && d.entityType in ['businesses', 'accounts', 'categories', 'transactions', 'recurring', 'tasks', 'products', 'sales', 'inventoryMoves', 'closings', 'goals', 'budgets']
         && d.entityId is string && d.entityId.size() >= 1 && d.entityId.size() <= 80
         && d.summary is string && d.summary.size() <= 200
         && d.createdAt == request.time;
@@ -428,6 +442,14 @@ service cloud.firestore {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid) && validGoal(request.resource.data) && isCreateStamp(request.resource.data);
         allow update: if isOwner(uid) && validGoal(request.resource.data) && isUpdateStamp(request.resource.data);
+        allow delete: if false;
+      }
+
+      match /budgets/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && validBudget(request.resource.data) && isCreateStamp(request.resource.data);
+        allow update: if isOwner(uid) && validBudget(request.resource.data) && isUpdateStamp(request.resource.data);
+        // Un límite no se borra: se desactiva.
         allow delete: if false;
       }
 

@@ -4,6 +4,8 @@ import { addDays, formatDateEs } from './dates'
 import { formatMinor } from './money'
 import { occurrencesBetween } from './recurrence'
 import type { ForecastResult } from './forecast'
+import type { BudgetStatus } from './budgets'
+import { BUDGET_PERIOD_LABELS } from '../types/ledger'
 
 export type Severity = 'critical' | 'warning' | 'info'
 export interface Alert { id: string; severity: Severity; title: string; detail: string; href?: string }
@@ -21,6 +23,7 @@ export function buildAlerts(a: {
   today: string
   truncated: boolean
   lowStock?: { name: string; units: number; reorderPoint: number }[]
+  budgets?: BudgetStatus[]
 }): Alert[] {
   const out: Alert[] = []
   const active = a.accounts.filter((x) => x.status === 'active')
@@ -75,6 +78,17 @@ export function buildAlerts(a: {
 
   for (const low of a.lowStock ?? []) {
     out.push({ id: `stock-${low.name}`, severity: 'warning', title: `Reponer ${low.name}`, detail: `Quedan ${low.units} unidad(es); tu aviso está en ${low.reorderPoint}.`, href: '/stock' })
+  }
+
+  for (const b of a.budgets ?? []) {
+    const period = BUDGET_PERIOD_LABELS[b.budget.period].toLowerCase()
+    if (b.level === 'over') {
+      out.push({ id: `budget-${b.budget.id}`, severity: 'critical', title: `Superaste tu límite: ${b.budget.name}`, detail: `Gastaste ${formatMinor(b.spentMinor)} de ${formatMinor(b.budget.limitMinor)} (${period}): te pasaste por ${formatMinor(-b.remainingMinor)}.`, href: '/alertas' })
+    } else if (b.level === 'near') {
+      out.push({ id: `budget-${b.budget.id}`, severity: 'warning', title: `Cerca de tu límite: ${b.budget.name}`, detail: `Llevas ${formatMinor(b.spentMinor)} de ${formatMinor(b.budget.limitMinor)} (${Math.round(b.pct)} %). Te quedan ${formatMinor(b.remainingMinor)}.`, href: '/alertas' })
+    } else if (b.projectedMinor !== null && b.projectedMinor > b.budget.limitMinor) {
+      out.push({ id: `budget-${b.budget.id}`, severity: 'info', title: `A este ritmo superarás: ${b.budget.name}`, detail: `Llevas ${formatMinor(b.spentMinor)}; al ritmo actual cerrarías el periodo en ${formatMinor(b.projectedMinor)} frente a tu límite de ${formatMinor(b.budget.limitMinor)}.`, href: '/alertas' })
+    }
   }
 
   if (a.truncated) {

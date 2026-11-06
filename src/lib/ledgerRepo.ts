@@ -2,17 +2,17 @@ import {
   collection, doc, runTransaction, serverTimestamp, writeBatch, type DocumentReference,
 } from 'firebase/firestore'
 import { requireDb } from './firebase'
-import type { ClosingDoc, GoalDoc, ProductDoc, AccountDoc, BusinessDoc, CategoryDoc, Recurring, RecurringDoc, TaskDoc, Transaction, TransactionDoc, TransactionStatus } from '../domain/types/ledger'
+import type { BudgetDoc, ClosingDoc, GoalDoc, ProductDoc, AccountDoc, BusinessDoc, CategoryDoc, Recurring, RecurringDoc, TaskDoc, Transaction, TransactionDoc, TransactionStatus } from '../domain/types/ledger'
 import { plannedId } from '../domain/calculations/recurrence'
 import type { BuiltSale } from '../domain/validation/sales'
 import type { BuiltInventory } from '../domain/validation/inventory'
 import type { BuiltTx } from '../domain/validation/ledger'
 
 /** Toda la información vive bajo users/{uid}/…; el uid sale de la sesión, nunca de un campo editable. */
-const col = (uid: string, name: 'businesses' | 'accounts' | 'categories' | 'transactions' | 'recurring' | 'tasks' | 'products' | 'sales' | 'inventoryMoves' | 'closings' | 'goals' | 'auditLogs') =>
+const col = (uid: string, name: 'businesses' | 'accounts' | 'categories' | 'transactions' | 'recurring' | 'tasks' | 'products' | 'sales' | 'inventoryMoves' | 'closings' | 'goals' | 'budgets' | 'auditLogs') =>
   collection(requireDb(), 'users', uid, name)
 
-export const newId = (uid: string, name: 'businesses' | 'accounts' | 'categories' | 'transactions' | 'recurring' | 'tasks' | 'products' | 'sales' | 'inventoryMoves' | 'goals') => doc(col(uid, name)).id
+export const newId = (uid: string, name: 'businesses' | 'accounts' | 'categories' | 'transactions' | 'recurring' | 'tasks' | 'products' | 'sales' | 'inventoryMoves' | 'goals' | 'budgets') => doc(col(uid, name)).id
 
 type Writer = { set: (ref: DocumentReference, data: Record<string, unknown>) => unknown }
 
@@ -21,7 +21,7 @@ function audit(w: Writer, uid: string, action: string, entityType: string, entit
 }
 
 /** Crea un documento solo si no existe: reintentos y doble clic no duplican. */
-async function createOnce(uid: string, name: 'businesses' | 'accounts' | 'categories' | 'recurring' | 'tasks' | 'products' | 'goals', id: string, data: object, summary: string) {
+async function createOnce(uid: string, name: 'businesses' | 'accounts' | 'categories' | 'recurring' | 'tasks' | 'products' | 'goals' | 'budgets', id: string, data: object, summary: string) {
   const ref = doc(col(uid, name), id)
   return runTransaction(requireDb(), async (t) => {
     const snap = await t.get(ref)
@@ -32,7 +32,7 @@ async function createOnce(uid: string, name: 'businesses' | 'accounts' | 'catego
   })
 }
 
-async function updateDocWithAudit(uid: string, name: 'businesses' | 'accounts' | 'categories' | 'recurring' | 'tasks' | 'products' | 'goals', id: string, patch: Record<string, unknown>, action: string, summary: string) {
+async function updateDocWithAudit(uid: string, name: 'businesses' | 'accounts' | 'categories' | 'recurring' | 'tasks' | 'products' | 'goals' | 'budgets', id: string, patch: Record<string, unknown>, action: string, summary: string) {
   const batch = writeBatch(requireDb())
   batch.update(doc(col(uid, name), id), { ...patch, updatedAt: serverTimestamp() })
   audit(batch, uid, action, name, id, summary)
@@ -206,3 +206,7 @@ export async function createClosing(uid: string, id: string, d: ClosingDoc): Pro
 /* Metas */
 export const createGoal = (uid: string, id: string, d: GoalDoc) => createOnce(uid, 'goals', id, d, `Meta creada: ${d.name}`)
 export const updateGoal = (uid: string, id: string, d: GoalDoc) => updateDocWithAudit(uid, 'goals', id, { ...d }, 'update', `Meta editada: ${d.name}`)
+
+/* Límites de gasto */
+export const createBudget = (uid: string, id: string, d: BudgetDoc) => createOnce(uid, 'budgets', id, d, `Límite creado: ${d.name}`)
+export const updateBudget = (uid: string, id: string, d: BudgetDoc) => updateDocWithAudit(uid, 'budgets', id, { ...d }, 'update', `Límite editado: ${d.name}`)

@@ -10,7 +10,8 @@ import { accountFormToDoc, businessFormToDoc, categoryFormToDoc, buildTransactio
 import { productFormToDoc, buildSale, saleMoveId } from '../domain/validation/sales'
 import { buildInventory } from '../domain/validation/inventory'
 import { recurringFormToDoc, taskFormToDoc } from '../domain/validation/phase3'
-import type { Account, Business, ClosingDoc, GoalDoc, Product, Category } from '../domain/types/ledger'
+import type { Account, Business, BudgetDoc, ClosingDoc, GoalDoc, Product, Category } from '../domain/types/ledger'
+import { defaultPlan, aggregatePlan } from '../domain/calculations/plan'
 
 /**
  * Esta prueba protege contra un fallo silencioso: que las reglas de Firestore rechacen lo que la app realmente envía
@@ -67,6 +68,13 @@ describe('las reglas de Firestore aceptan exactamente los campos que la app env�
     const form = { name: 'NYXAR', description: '', type: 'physical' as const, startDate: '2026-01-01', payoutMethod: 'owner_draw' as const, payoutFrequency: 'monthly' as const, payoutCustomDays: '', minReserve: '', taxEnabled: false, taxLabel: '', taxRate: '', taxPricesInclude: 'included' as const, allocReserve: '', allocReinvest: '', allocOwner: '', notes: '' }
     check('validBusiness', { ...businessFormToDoc(form), ...stamps }, ['payout', 'reserve', 'tax'])
     check('validBusiness', { ...businessFormToDoc({ ...form, allocReserve: '20', allocReinvest: '30', allocOwner: '50' }), ...stamps }, ['payout', 'reserve', 'tax'])
+  })
+  it('negocio con plan de uso del dinero y límite de gasto', () => {
+    const form = { name: 'NYXAR', description: '', type: 'physical' as const, startDate: '2026-01-01', payoutMethod: 'owner_draw' as const, payoutFrequency: 'monthly' as const, payoutCustomDays: '', minReserve: '', taxEnabled: false, taxLabel: '', taxRate: '', taxPricesInclude: 'included' as const, allocReserve: '', allocReinvest: '', allocOwner: '', notes: '' }
+    const plan = defaultPlan('physical')
+    check('validBusiness', { ...businessFormToDoc(form), plan, allocation: aggregatePlan(plan), ...stamps }, ['payout', 'reserve', 'tax', 'allocation'])
+    const budget: BudgetDoc = { name: 'Gasto del mes', period: 'month', scope: 'all', categoryId: null, limitMinor: 100000, active: true }
+    check('validBudget', { ...budget, ...stamps })
   })
   it('cuenta', () => {
     check('validAccount', { ...accountFormToDoc({ name: 'Banco', scope: 'business', businessId: 'b1', accountType: 'bank', openingBalance: '10', openingBalanceDate: '2026-01-01' }), ...stamps })

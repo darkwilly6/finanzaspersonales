@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { collection, limit, onSnapshot, orderBy, query, type DocumentData, type Timestamp } from 'firebase/firestore'
 import { requireDb } from '../../lib/firebase'
 import { useAuth } from '../auth/AuthContext'
-import type { Account, Business, Category, Closing, Goal, InventoryMove, Product, Recurring, Sale, Task, Transaction } from '../../domain/types/ledger'
+import type { Account, Budget, Business, Category, Closing, Goal, InventoryMove, Product, Recurring, Sale, Task, Transaction } from '../../domain/types/ledger'
 import { computeBalances, type AccountBalance } from '../../domain/calculations/transactionRules'
 import { stockByProduct, type StockState } from '../../domain/calculations/inventory'
 import { saleStatus } from '../../domain/calculations/sales'
@@ -27,6 +27,7 @@ interface LedgerState {
   inventoryMoves: InventoryMove[]
   closings: Closing[]
   goals: Goal[]
+  budgets: Budget[]
   /** Stock actual por producto (movimientos anulados no cuentan). */
   stock: Map<string, StockState>
   /** Ventas anuladas: su ingreso, costo y stock dejan de contar. */
@@ -56,6 +57,7 @@ export function LedgerData({ children }: { children: ReactNode }) {
   const [moves, setMoves] = useState<InventoryMove[] | null>(null)
   const [closings, setClosings] = useState<Closing[] | null>(null)
   const [goals, setGoals] = useState<Goal[] | null>(null)
+  const [budgets, setBudgets] = useState<Budget[] | null>(null)
   const [salesTruncated, setSalesTruncated] = useState(false)
   const [truncated, setTruncated] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -83,6 +85,7 @@ export function LedgerData({ children }: { children: ReactNode }) {
       onSnapshot(query(base('inventoryMoves'), orderBy('date', 'desc'), limit(SALES_LIMIT)), (s) => setMoves(s.docs.map((d) => { const data = d.data(); return { id: d.id, ...data, createdAt: toDate(data.createdAt) } as InventoryMove })), onErr),
       onSnapshot(query(base('closings'), orderBy('month', 'desc')), (s) => setClosings(s.docs.map((d) => { const data = d.data(); return { id: d.id, ...data, createdAt: toDate(data.createdAt) } as Closing })), onErr),
       onSnapshot(query(base('goals'), orderBy('name')), (s) => setGoals(s.docs.map((d) => withId<Goal>(d))), onErr),
+      onSnapshot(query(base('budgets'), orderBy('name')), (s) => setBudgets(s.docs.map((d) => withId<Budget>(d))), onErr),
       onSnapshot(query(base('products'), orderBy('name')), (s) => setProducts(s.docs.map((d) => withId<Product>(d))), onErr),
       onSnapshot(
         query(base('sales'), orderBy('date', 'desc'), limit(SALES_LIMIT + 1)),
@@ -121,7 +124,7 @@ export function LedgerData({ children }: { children: ReactNode }) {
     const cancelledSaleIds = new Set([...bySale.entries()].filter(([, list]) => saleStatus(list) === 'cancelled').map(([id]) => id))
     const stock = stockByProduct(moves ?? [], (m) => (m.saleId !== null && cancelledSaleIds.has(m.saleId)) || (m.txId !== null && cancelledTx.has(m.txId)))
     return {
-      loading: !error && (businesses === null || accounts === null || categories === null || transactions === null || recurring === null || tasks === null || products === null || sales === null || moves === null || closings === null || goals === null),
+      loading: !error && (businesses === null || accounts === null || categories === null || transactions === null || recurring === null || tasks === null || products === null || sales === null || moves === null || closings === null || goals === null || budgets === null),
       error,
       businesses: businesses ?? [],
       accounts: acc,
@@ -134,6 +137,7 @@ export function LedgerData({ children }: { children: ReactNode }) {
       inventoryMoves: moves ?? [],
       closings: closings ?? [],
       goals: goals ?? [],
+      budgets: budgets ?? [],
       stock,
       cancelledSaleIds,
       truncated: truncated || salesTruncated,
@@ -141,7 +145,7 @@ export function LedgerData({ children }: { children: ReactNode }) {
       today,
       timezone,
     }
-  }, [businesses, accounts, categories, transactions, recurring, tasks, products, sales, moves, closings, goals, truncated, salesTruncated, error, today, timezone])
+  }, [businesses, accounts, categories, transactions, recurring, tasks, products, sales, moves, closings, goals, budgets, truncated, salesTruncated, error, today, timezone])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

@@ -538,3 +538,33 @@ a:hover { text-decoration-color: var(--accent); }
 
 /* El panel de inicio aprovecha pantallas anchas */
 .page.wide.dash { max-width: 1320px; }
+
+/* ───────── Plan de uso del dinero y límites de gasto ───────── */
+.warn-text { color: var(--warn); }
+.plan-editor { gap: 12px; }
+.plan-row { display: grid; grid-template-columns: minmax(140px, 2fr) minmax(170px, 2fr) 84px 36px; gap: 10px; align-items: end; padding: 10px 0; border-top: 1px solid var(--border); }
+.plan-sum { font-weight: 700; font-size: 0.9rem; }
+.plan-sum.ok { color: var(--pos); }
+.plan-sum.bad { color: var(--warn); }
+.plan-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.plan-bucket { display: grid; grid-template-columns: 40px 1fr auto minmax(150px, auto); gap: 14px; align-items: center; padding: 14px 0; border-top: 1px solid var(--border); }
+.plan-bucket:first-child { border-top: 0; }
+.plan-bucket-text { display: flex; flex-direction: column; min-width: 0; }
+.plan-bucket-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; }
+.plan-owner { background: rgba(var(--accent-rgb), 0.16); color: var(--accent); }
+.plan-reserve { background: rgba(56, 189, 248, 0.16); color: var(--info); }
+.plan-use { background: rgba(245, 165, 36, 0.16); color: var(--warn); }
+.plan-amount { font-size: 1.15rem; font-weight: 700; text-align: right; }
+.plan-action { display: flex; justify-content: flex-end; }
+.today-list { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+.budget-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
+.budget-row { display: grid; gap: 8px; }
+.budget-row.level-over .share-head strong { color: var(--neg); }
+
+@media (max-width: 900px) {
+  .plan-row { grid-template-columns: 1fr 1fr; }
+  .plan-row > .field:first-child { grid-column: 1 / -1; }
+  .plan-bucket { grid-template-columns: 40px 1fr auto; }
+  .plan-action { grid-column: 1 / -1; justify-content: flex-start; }
+}

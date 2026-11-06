@@ -299,3 +299,21 @@ describe('stock, cierres y metas', () => {
   })
 })
 
+
+describe('límites de gasto y plan de uso del dinero', () => {
+  const budget = (over: object = {}) => ({ name: 'Gasto del mes', period: 'month', scope: 'all', categoryId: null, limitMinor: 100000, active: true, createdAt: ts, updatedAt: ts, ...over })
+  it('crea límites válidos y rechaza periodos, importes y campos inválidos; no se borran', async () => {
+    await assertSucceeds(setDoc(doc(A(), 'users/userA/budgets/g1'), budget()))
+    await assertFails(setDoc(doc(A(), 'users/userA/budgets/g2'), budget({ period: 'year' })))
+    await assertFails(setDoc(doc(A(), 'users/userA/budgets/g3'), budget({ limitMinor: 0 })))
+    await assertFails(setDoc(doc(A(), 'users/userA/budgets/g4'), { ...budget(), extra: 1 }))
+    await assertFails(setDoc(doc(B(), 'users/userA/budgets/g5'), budget()))
+    await assertSucceeds(updateDoc(doc(A(), 'users/userA/budgets/g1'), { active: false, updatedAt: serverTimestamp() }))
+    await assertFails(deleteDoc(doc(A(), 'users/userA/budgets/g1')))
+  })
+  it('un negocio acepta un plan detallado de hasta 10 partes', async () => {
+    const plan = [{ id: 'owner', name: 'Para mí', kind: 'owner', bps: 6000 }, { id: 'ads', name: 'Publicidad', kind: 'use', bps: 4000 }]
+    await assertSucceeds(setDoc(doc(A(), 'users/userA/businesses/bp1'), { ...business(), plan, allocation: { reserveBps: 0, reinvestBps: 4000, ownerBps: 6000 } }))
+    await assertFails(setDoc(doc(A(), 'users/userA/businesses/bp2'), { ...business(), plan: [] }))
+  })
+})

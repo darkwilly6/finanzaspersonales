@@ -1,4 +1,4 @@
-import { Home, Building2, ArrowLeftRight, Wallet, CalendarDays, LineChart, TrendingUp, Rocket, ClipboardCheck, Bell, FileSpreadsheet, Settings, ShoppingBag, Package, Tags, Repeat, Boxes, type LucideIcon } from 'lucide-react'
+import { Home, Building2, ArrowLeftRight, Wallet, CalendarDays, LineChart, TrendingUp, Rocket, ClipboardCheck, Bell, FileSpreadsheet, Settings, ShoppingBag, Package, Tags, Repeat, Boxes, PieChart, type LucideIcon } from 'lucide-react'
 
 export interface NavItem {
   id: string
@@ -23,6 +23,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'stock', label: 'Stock e inventario', path: '/stock', icon: Boxes, phase: 4 },
   { id: 'inversiones', label: 'Inversiones y trading', path: '/inversiones', icon: TrendingUp, phase: 4 },
   { id: 'cierre', label: 'Cierre financiero', path: '/cierre', icon: ClipboardCheck, phase: 5 },
+  { id: 'plan', label: 'Plan de uso del dinero', path: '/plan', icon: PieChart, phase: 5 },
   { id: 'escalado', label: 'Escalado y escenarios', path: '/escalado', icon: Rocket, phase: 6 },
   { id: 'alertas', label: 'Alertas y tareas', path: '/alertas', icon: Bell, phase: 3 },
   { id: 'importar', label: 'Exportar y respaldo', path: '/exportar', icon: FileSpreadsheet, phase: 7 },
